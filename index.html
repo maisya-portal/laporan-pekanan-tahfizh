@@ -240,24 +240,27 @@
       document.getElementById('btnCetak').disabled = false;
     }
 
-    // 3. FETCH DATA DARI GOOGLE APPS SCRIPT
+    // 3. FETCH DATA DARI GOOGLE APPS SCRIPT (Menggunakan JSONP untuk Bypass CORS)
     if (START_DATE && END_DATE) {
-      const apiUrl = `${GAS_WEBAPP_URL}?api=laporan&start=${START_DATE}&end=${END_DATE}&halaqoh=${HALAQOH_ID}`;
-      
-      fetch(apiUrl)
-        .then(response => response.json())
-        .then(res => {
-          if (!res || !res.success) {
-            document.getElementById('output').innerHTML = 
-              '<div class="alert alert-danger text-center">Gagal memuat laporan: ' + (res.message || 'Server error.') + '</div>';
-            return;
-          }
-          renderLaporan(res.data, res.catatan);
-        })
-        .catch(err => {
+      // Buat nama fungsi callback global
+      window.handleLaporanData = function(res) {
+        if (!res || !res.success) {
           document.getElementById('output').innerHTML = 
-            '<div class="alert alert-danger text-center">Terjadi kesalahan jaringan atau CORS: ' + err.message + '</div>';
-        });
+            '<div class="alert alert-danger text-center">Gagal memuat laporan: ' + (res ? (res.message || 'Server error.') : 'Respons kosong.') + '</div>';
+          return;
+        }
+        renderLaporan(res.data, res.catatan);
+      };
+
+      // Tambahkan script tag secara dinamis untuk trigger request JSONP
+      const apiUrl = `${GAS_WEBAPP_URL}?api=laporan&start=${START_DATE}&end=${END_DATE}&halaqoh=${HALAQOH_ID}&callback=handleLaporanData`;
+      const script = document.createElement('script');
+      script.src = apiUrl;
+      script.onerror = function() {
+        document.getElementById('output').innerHTML = 
+          '<div class="alert alert-danger text-center">Terjadi kesalahan saat menghubungi server (CORS / Network Error).</div>';
+      };
+      document.body.appendChild(script);
     }
   </script>
 </body>
