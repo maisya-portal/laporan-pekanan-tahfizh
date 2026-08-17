@@ -284,6 +284,7 @@
       html += '      <div class="text-secondary small mt-2" style="white-space: pre-wrap; line-height: 1.5;">' + (santriCatatan || '<span class="text-muted fst-italic">Tidak ada catatan khusus untuk santri ini.</span>') + '</div>';
       html += '    </div>';
       html += '  </div>';
+      window._santriHalaqoh = foundHalaqoh;
 
       html += '</div>';
       output.innerHTML = html;
@@ -291,7 +292,11 @@
 
     function switchToHalaqohView() {
       NIS_PARAM = '';
-      renderLaporan(window._rawHalaqohData, window._rawCatatanData);
+      if (window._santriHalaqoh) {
+        renderLaporan([window._santriHalaqoh], window._rawCatatanData);
+      } else {
+        renderLaporan(window._rawHalaqohData, window._rawCatatanData);
+      }
     }
 
     // ==========================================
@@ -442,7 +447,9 @@
           jenisArr.forEach(function(j) {
             var daySum = 0;
             halaqoh.santri.forEach(function(s) {
-              var arr = (j === 'murojaah') ? (s.murojaah[d] || []) : (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
+              var arr = [];
+              if (j === 'murojaah') { arr = s.murojaah[d] || []; }
+              else { arr = (s.ziyadah[d] || []).filter(function(i) { return i.type === j; }); }
               daySum += arr.reduce(function(a, v) { return a + v.val; }, 0);
             });
             html += '<td class="text-center ' + typeLabels[j].text + '">' + (daySum || '-') + '</td>';
@@ -474,7 +481,7 @@
         renderLaporan(res.data, res.catatan);
       };
 
-      const apiUrl = `${GAS_WEBAPP_URL}?api=laporan&start=${START_DATE}&end=${END_DATE}&halaqoh=${HALAQOH_ID}&callback=handleLaporanData`;
+      const apiUrl = `${GAS_WEBAPP_URL}?api=laporan&start=${START_DATE}&end=${END_DATE}&halaqoh=${HALAQOH_ID}&nis=${NIS_PARAM}&callback=handleLaporanData`;
       const script = document.createElement('script');
       script.src = apiUrl;
       script.onerror = function() {
