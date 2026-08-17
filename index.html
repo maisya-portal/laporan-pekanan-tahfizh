@@ -160,11 +160,22 @@
 
       var jenisArr = ['ziyadah', 'iadah', 'tilawah', 'murojaah'];
       var totals = { ziyadah: 0, iadah: 0, tilawah: 0, murojaah: 0 };
+      var absensiTotals = { Hadir: 0, Izin: 0, Sakit: 0, Alpa: 0 };
+
       dates.forEach(function(d) {
         jenisArr.forEach(function(j) {
           var arr = (j === 'murojaah') ? (foundSantri.murojaah[d] || []) : (foundSantri.ziyadah[d] || []).filter(function(i) { return i.type === j; });
           var sum = arr.reduce(function(a, v) { return a + v.val; }, 0);
           totals[j] = (totals[j] || 0) + sum;
+        });
+
+        var absArr = (foundSantri.absensi && foundSantri.absensi[d]) ? foundSantri.absensi[d] : [];
+        absArr.forEach(function(item) {
+          var st = (item.status || 'Hadir').trim().toLowerCase();
+          if (st.indexOf('hadir') !== -1) absensiTotals.Hadir++;
+          else if (st.indexOf('izin') !== -1) absensiTotals.Izin++;
+          else if (st.indexOf('sakit') !== -1) absensiTotals.Sakit++;
+          else if (st.indexOf('alpa') !== -1 || st.indexOf('tanpa') !== -1) absensiTotals.Alpa++;
         });
       });
 
@@ -188,12 +199,23 @@
       html += '    </div>';
       html += '  </div>';
 
-      // 4 Box Metrik Capaian
-      html += '  <div class="row g-2 mb-3 text-center">';
+      // 4 Box Metrik Capaian Setoran
+      html += '  <div class="row g-2 mb-2 text-center">';
       html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-success small fw-bold">Ziyadah</div><div class="fs-5 fw-bold text-success">' + (totals.ziyadah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">sesi</small></div></div></div>';
       html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-info-emphasis small fw-bold">I\'adah</div><div class="fs-5 fw-bold text-info-emphasis">' + (totals.iadah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">sesi</small></div></div></div>';
       html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-warning-emphasis small fw-bold">Tilawah</div><div class="fs-5 fw-bold text-warning-emphasis">' + (totals.tilawah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">juz</small></div></div></div>';
       html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-primary small fw-bold">Muroja\'ah</div><div class="fs-5 fw-bold text-primary">' + (totals.murojaah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">juz</small></div></div></div>';
+      html += '  </div>';
+
+      // Ringkasan Kehadiran Halaqoh
+      html += '  <div class="p-2 px-3 rounded-3 border bg-light d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">';
+      html += '    <div class="fw-semibold text-dark small"><i class="bi bi-calendar-check text-success me-2"></i>Rekap Absensi Halaqoh Pekan Ini:</div>';
+      html += '    <div class="d-flex flex-wrap gap-2">';
+      html += '      <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="bi bi-check-circle me-1"></i>Hadir: ' + absensiTotals.Hadir + '</span>';
+      html += '      <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1"><i class="bi bi-info-circle me-1"></i>Izin: ' + absensiTotals.Izin + '</span>';
+      html += '      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1"><i class="bi bi-exclamation-circle me-1"></i>Sakit: ' + absensiTotals.Sakit + '</span>';
+      html += '      <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1"><i class="bi bi-x-circle me-1"></i>Alpa: ' + absensiTotals.Alpa + '</span>';
+      html += '    </div>';
       html += '  </div>';
 
       // Tabel Runtut Hari Demi Hari (Potrait)
@@ -201,6 +223,7 @@
       html += '    <thead class="table-dark text-white text-center">';
       html += '      <tr>';
       html += '        <th style="width: 120px;">Hari &amp; Tanggal</th>';
+      html += '        <th style="width: 130px;">Absensi Halaqoh</th>';
       html += '        <th>Ziyadah</th>';
       html += '        <th>I\'adah</th>';
       html += '        <th>Tilawah</th>';
@@ -221,6 +244,27 @@
         html += '        <td class="text-center ' + (isFriday ? 'table-warning fw-bold text-warning-emphasis' : 'fw-semibold text-dark') + '">';
         html += '          <div>' + dayName + '</div>';
         html += '          <div class="text-muted small" style="font-size:0.68rem;">' + dayNum + '/' + monthNum + '</div>';
+        html += '        </td>';
+
+        // Absensi
+        var absArr = (foundSantri.absensi && foundSantri.absensi[d]) ? foundSantri.absensi[d] : [];
+        html += '        <td class="text-center p-2" style="min-width:120px;">';
+        if (absArr.length > 0) {
+          absArr.forEach(function(item) {
+            var st = (item.status || 'Hadir').trim();
+            var stLower = st.toLowerCase();
+            var badgeCls = 'bg-success text-white';
+            if (stLower.indexOf('izin') !== -1) badgeCls = 'bg-info text-dark';
+            else if (stLower.indexOf('sakit') !== -1) badgeCls = 'bg-warning text-dark';
+            else if (stLower.indexOf('alpa') !== -1 || stLower.indexOf('tanpa') !== -1) badgeCls = 'bg-danger text-white';
+
+            var sesiLabel = item.sesi ? ' (' + item.sesi + ')' : '';
+            var ketLabel = item.ket ? '<div class="text-muted" style="font-size:0.65rem;">' + item.ket + '</div>' : '';
+            html += '<div class="mb-1"><span class="badge ' + badgeCls + ' py-1 px-2">' + st + sesiLabel + '</span>' + ketLabel + '</div>';
+          });
+        } else {
+          html += '<span class="text-muted small fst-italic">-</span>';
+        }
         html += '        </td>';
 
         // Ziyadah
