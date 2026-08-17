@@ -368,7 +368,7 @@
       document.getElementById('toolbar-sub-title').textContent = 'Laporan Pekanan Halaqoh';
       document.getElementById('toolbar-action-buttons').innerHTML = '<button onclick="window.print()" class="btn btn-success btn-sm"><i class="bi bi-printer me-1"></i>Cetak / Simpan PDF</button>';
 
-      var jenisArr = ['ziyadah', 'iadah', 'tilawah', 'murojaah'];
+      var jenisArr = ['absensi', 'ziyadah', 'iadah', 'tilawah', 'murojaah'];
       var dates = [];
       var cur  = new Date(START_DATE + 'T00:00:00');
       var endD = new Date(END_DATE   + 'T00:00:00');
@@ -383,10 +383,11 @@
       }
       var dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
       var typeLabels = {
-        'ziyadah' : { label: 'Ziy', bg: 'bg-success',           text: 'text-success' },
-        'iadah'   : { label: 'Iad', bg: 'bg-info text-dark',    text: 'text-info'    },
-        'tilawah' : { label: 'Til', bg: 'bg-warning text-dark', text: 'text-warning' },
-        'murojaah': { label: 'Mur', bg: 'bg-primary',           text: 'text-primary' }
+        'absensi' : { label: 'Abs', bg: 'bg-info-subtle text-dark border', text: 'text-info-emphasis' },
+        'ziyadah' : { label: 'Ziy', bg: 'bg-success text-white',           text: 'text-success' },
+        'iadah'   : { label: 'Iad', bg: 'bg-info text-dark',               text: 'text-info'    },
+        'tilawah' : { label: 'Til', bg: 'bg-warning text-dark',            text: 'text-warning' },
+        'murojaah': { label: 'Mur', bg: 'bg-primary text-white',           text: 'text-primary' }
       };
       var colSpan = jenisArr.length;
       var html = '';
@@ -398,8 +399,16 @@
         halaqoh.santri.forEach(function(s) {
           dates.forEach(function(d) {
             jenisArr.forEach(function(j) {
-              var arr = (j === 'murojaah') ? (s.murojaah[d] || []) : (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
-              totals[j] += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              if (j === 'absensi') {
+                var absArr = (s.absensi && s.absensi[d]) ? s.absensi[d] : [];
+                totals[j] += absArr.filter(function(x) { return (x.status || '').toLowerCase().indexOf('hadir') !== -1; }).length;
+              } else if (j === 'murojaah') {
+                var arr = s.murojaah[d] || [];
+                totals[j] += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              } else {
+                var arr = (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
+                totals[j] += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              }
             });
           });
         });
@@ -457,23 +466,59 @@
 
           dates.forEach(function(d) {
             jenisArr.forEach(function(j) {
-              var arr = (j === 'murojaah') ? (s.murojaah[d] || []) : (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
-              var sum = arr.reduce(function(a, v) { return a + v.val; }, 0);
-              santriTotals[j] += sum;
-              var infoJoin = arr.map(function(item) { return item.info; }).join(', ');
-              html += '<td class="text-center p-1" style="vertical-align:top;">';
-              if (arr.length > 0) {
-                html += '<span class="badge ' + typeLabels[j].bg + ' rounded-pill mb-1">' + sum + '</span>';
-                html += '<div class="' + typeLabels[j].text + '" style="font-size:0.60rem;white-space:pre-wrap;word-break:break-word;line-height:1.1;">' + infoJoin + '</div>';
+              if (j === 'absensi') {
+                var absArr = (s.absensi && s.absensi[d]) ? s.absensi[d] : [];
+                var hCount = 0, iCount = 0, sCount = 0, aCount = 0;
+                absArr.forEach(function(item) {
+                  var st = (item.status || 'Hadir').trim().toLowerCase();
+                  if (st.indexOf('hadir') !== -1) hCount++;
+                  else if (st.indexOf('izin') !== -1) iCount++;
+                  else if (st.indexOf('sakit') !== -1) sCount++;
+                  else if (st.indexOf('alpa') !== -1 || st.indexOf('tanpa') !== -1) aCount++;
+                });
+                santriTotals['absensi'] = (santriTotals['absensi'] || 0) + hCount;
+
+                html += '<td class="text-center p-1" style="vertical-align:top;">';
+                if (absArr.length > 0) {
+                  if (hCount > 0) html += '<div><span class="badge bg-success rounded-pill mb-1" title="' + hCount + ' sesi Hadir">' + hCount + ' H</span></div>';
+                  if (iCount > 0) html += '<div><span class="badge bg-info text-dark rounded-pill mb-1" title="' + iCount + ' sesi Izin">' + iCount + ' I</span></div>';
+                  if (sCount > 0) html += '<div><span class="badge bg-warning text-dark rounded-pill mb-1" title="' + sCount + ' sesi Sakit">' + sCount + ' S</span></div>';
+                  if (aCount > 0) html += '<div><span class="badge bg-danger text-white rounded-pill mb-1" title="' + aCount + ' sesi Alpa">' + aCount + ' A</span></div>';
+                  
+                  var sesis = absArr.map(function(item) {
+                    var sName = item.sesi || '';
+                    var stShort = (item.status || 'H').charAt(0).toUpperCase();
+                    return (sName ? sName.charAt(0) + ':' : '') + stShort;
+                  }).join(' ');
+                  html += '<div class="text-muted" style="font-size:0.58rem;line-height:1;">' + sesis + '</div>';
+                } else {
+                  html += '<span style="color:#ccc;font-size:0.7rem;">-</span>';
+                }
+                html += '</td>';
               } else {
-                html += '<span style="color:#ccc;font-size:0.7rem;">-</span>';
+                var arr = (j === 'murojaah') ? (s.murojaah[d] || []) : (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
+                var sum = arr.reduce(function(a, v) { return a + v.val; }, 0);
+                santriTotals[j] += sum;
+                var infoJoin = arr.map(function(item) { return item.info; }).join(', ');
+                html += '<td class="text-center p-1" style="vertical-align:top;">';
+                if (arr.length > 0) {
+                  html += '<span class="badge ' + typeLabels[j].bg + ' rounded-pill mb-1">' + sum + '</span>';
+                  html += '<div class="' + typeLabels[j].text + '" style="font-size:0.60rem;white-space:pre-wrap;word-break:break-word;line-height:1.1;">' + infoJoin + '</div>';
+                } else {
+                  html += '<span style="color:#ccc;font-size:0.7rem;">-</span>';
+                }
+                html += '</td>';
               }
-              html += '</td>';
             });
           });
 
           jenisArr.forEach(function(j) {
-            html += '<td class="text-center fw-bold ' + (santriTotals[j] > 0 ? typeLabels[j].text : 'text-muted') + '">' + santriTotals[j] + '</td>';
+            if (j === 'absensi') {
+              var val = santriTotals['absensi'] || 0;
+              html += '<td class="text-center fw-bold ' + (val > 0 ? 'text-success' : 'text-muted') + '">' + (val > 0 ? val + ' H' : '-') + '</td>';
+            } else {
+              html += '<td class="text-center fw-bold ' + (santriTotals[j] > 0 ? typeLabels[j].text : 'text-muted') + '">' + santriTotals[j] + '</td>';
+            }
           });
 
           // Catatan pekanan
@@ -495,10 +540,16 @@
           jenisArr.forEach(function(j) {
             var daySum = 0;
             halaqoh.santri.forEach(function(s) {
-              var arr = [];
-              if (j === 'murojaah') { arr = s.murojaah[d] || []; }
-              else { arr = (s.ziyadah[d] || []).filter(function(i) { return i.type === j; }); }
-              daySum += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              if (j === 'absensi') {
+                var absArr = (s.absensi && s.absensi[d]) ? s.absensi[d] : [];
+                daySum += absArr.filter(function(x) { return (x.status || '').toLowerCase().indexOf('hadir') !== -1; }).length;
+              } else if (j === 'murojaah') {
+                var arr = s.murojaah[d] || [];
+                daySum += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              } else {
+                var arr = (s.ziyadah[d] || []).filter(function(i) { return i.type === j; });
+                daySum += arr.reduce(function(a, v) { return a + v.val; }, 0);
+              }
             });
             html += '<td class="text-center ' + typeLabels[j].text + '">' + (daySum || '-') + '</td>';
           });
