@@ -6,13 +6,13 @@
   <title>Laporan Pekanan Halaqoh – Maisya Tahfizh</title>
 
   <!-- ============================================== -->
-  <!-- 1. GANTI URL INI DENGAN URL DEPLOY APLIKASI ANDA -->
+  <!-- 1. URL DEPLOY APPS SCRIPT PRODUCTION -->
   <!-- ============================================== -->
   <script>
     const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwPZkQqo4xjGAgxk6LBcZegJbunxZ8eDKUDy9UaLAarZYYUyALV9y9XGovNrrcsLbO_hA/exec";
   </script>
 
-  <!-- Open Graph (Bisa disesuaikan manual) -->
+  <!-- Open Graph -->
   <meta property="og:type"        content="website">
   <meta property="og:title"       content="Laporan Pekanan Halaqoh – Maisya Tahfizh">
   <meta property="og:description" content="Rekap setoran ziyadah, muroja'ah & tilawah santri halaqoh Maisya Tahfizh, Ponpes Imam Syafi'i Brebes.">
@@ -54,14 +54,14 @@
   <div class="no-print-bar">
     <img src="https://lh3.googleusercontent.com/d/1nliMGEQLPyzVh_EDtcVjVlkQOMafMDwM" alt="Logo" style="height:28px;">
     <span class="fw-bold text-success">Maisya Tahfizh</span>
-    <span class="text-muted small">Laporan Pekanan Halaqoh</span>
-    <div class="ms-auto d-flex gap-2">
+    <span class="text-muted small" id="toolbar-sub-title">Laporan Pekanan</span>
+    <div class="ms-auto d-flex gap-2" id="toolbar-action-buttons">
       <button onclick="window.print()" class="btn btn-success btn-sm" id="btnCetak" disabled><i class="bi bi-printer me-1"></i>Cetak PDF</button>
     </div>
   </div>
 
-  <div class="print-header">
-    <h4><i class="bi bi-bar-chart-line me-2"></i>Laporan Pekanan Halaqoh</h4>
+  <div class="print-header" id="header-area">
+    <h4 id="doc-main-title"><i class="bi bi-bar-chart-line me-2"></i>Laporan Pekanan Halaqoh</h4>
     <p>Ponpes Imam Syafi'i Brebes — Maisya Tahfizh</p>
     <div class="periode-badge" id="label-periode">Memuat Data...</div>
   </div>
@@ -75,16 +75,28 @@
   </div>
 
   <script>
-    // 2. AMBIL PARAMETER DARI URL GITHUB PAGES (Misal: ?start=2026-07-27&end=...&halaqoh=...)
+    // Parameter URL GitHub Pages
     const urlParams = new URLSearchParams(window.location.search);
     const START_DATE = urlParams.get('start') || '';
     const END_DATE   = urlParams.get('end')   || '';
     const HALAQOH_ID = urlParams.get('halaqoh') || 'all';
+    var NIS_PARAM    = urlParams.get('nis') || '';
+
+    window._rawHalaqohData = [];
+    window._rawCatatanData = [];
 
     function fmtTgl(s) {
       if (!s) return '';
       var p = s.split('-');
       return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : s;
+    }
+
+    function fmtDateIndo(dStr) {
+      if (!dStr) return '';
+      var p = dStr.split('-');
+      if (p.length !== 3) return dStr;
+      var months = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      return parseInt(p[2], 10) + ' ' + (months[parseInt(p[1], 10)] || p[1]) + ' ' + p[0];
     }
 
     if (START_DATE && END_DATE) {
@@ -94,12 +106,216 @@
       document.getElementById('output').innerHTML = '<div class="alert alert-warning text-center">URL tidak lengkap. Pastikan membuka link yang dibagikan dari aplikasi.</div>';
     }
 
+    // ==========================================
+    // 1. RENDER LAPORAN SANTRI (POTRAIT VIEW)
+    // ==========================================
+    function renderLaporanSantri(halaqohDataArr, catatanCache, targetNis) {
+      var output = document.getElementById('output');
+      var foundSantri = null;
+      var foundHalaqoh = null;
+
+      for (var h = 0; h < halaqohDataArr.length; h++) {
+        var hObj = halaqohDataArr[h];
+        for (var s = 0; s < (hObj.santri || []).length; s++) {
+          if (String(hObj.santri[s].nis) === String(targetNis)) {
+            foundSantri = hObj.santri[s];
+            foundHalaqoh = hObj;
+            break;
+          }
+        }
+        if (foundSantri) break;
+      }
+
+      if (!foundSantri) {
+        output.innerHTML = '<div class="alert alert-warning text-center"><i class="bi bi-exclamation-triangle me-2"></i>Data santri dengan NIS ' + targetNis + ' tidak ditemukan pada periode ini.<br><button class="btn btn-outline-success btn-sm mt-3" onclick="switchToHalaqohView()"><i class="bi bi-arrow-left me-1"></i>Kembali ke Laporan Halaqoh</button></div>';
+        return;
+      }
+
+      // Update Header & Judul
+      document.getElementById('doc-main-title').innerHTML = '<i class="bi bi-person-badge me-2"></i>Laporan Pekanan Santri (Potrait)';
+      document.getElementById('toolbar-sub-title').textContent = 'Detail Potrait - ' + (foundSantri.nama || '-');
+
+      // Update Toolbar Buttons
+      var toolbarBtn = document.getElementById('toolbar-action-buttons');
+      toolbarBtn.innerHTML = '<button onclick="switchToHalaqohView()" class="btn btn-outline-secondary btn-sm me-1"><i class="bi bi-grid-3x3 me-1"></i>Rekap Halaqoh</button><button onclick="window.print()" class="btn btn-success btn-sm"><i class="bi bi-printer me-1"></i>Cetak Potrait / PDF</button>';
+
+      var dates = [];
+      var cur = new Date(START_DATE + 'T00:00:00');
+      var endD = new Date(END_DATE + 'T00:00:00');
+      while (cur <= endD) {
+        var y = cur.getFullYear();
+        var m = String(cur.getMonth() + 1).padStart(2, '0');
+        var d2 = String(cur.getDate()).padStart(2, '0');
+        dates.push(y + '-' + m + '-' + d2);
+        cur.setDate(cur.getDate() + 1);
+      }
+      var dayNamesIndo = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jum\'at', 'Sabtu'];
+
+      // Catatan santri
+      var santriCatatan = '';
+      if (catatanCache) {
+        var f = catatanCache.filter(function(c) { return String(c.NIS) === String(foundSantri.nis); });
+        if (f.length > 0) santriCatatan = f[0].Catatan || '';
+      }
+
+      var jenisArr = ['ziyadah', 'iadah', 'tilawah', 'murojaah'];
+      var totals = { ziyadah: 0, iadah: 0, tilawah: 0, murojaah: 0 };
+      dates.forEach(function(d) {
+        jenisArr.forEach(function(j) {
+          var arr = (j === 'murojaah') ? (foundSantri.murojaah[d] || []) : (foundSantri.ziyadah[d] || []).filter(function(i) { return i.type === j; });
+          var sum = arr.reduce(function(a, v) { return a + v.val; }, 0);
+          totals[j] = (totals[j] || 0) + sum;
+        });
+      });
+
+      var html = '';
+      html += '<div class="container-fluid px-0" style="max-width: 800px; margin: 0 auto;">';
+      
+      // Identitas Santri
+      html += '  <div class="card border mb-3 shadow-none">';
+      html += '    <div class="card-body p-3">';
+      html += '      <div class="d-flex justify-content-between align-items-start">';
+      html += '        <div>';
+      html += '          <h5 class="fw-bold text-success mb-1">' + (foundSantri.nama || '-') + '</h5>';
+      html += '          <div class="text-muted small d-flex flex-wrap gap-3">';
+      html += '            <span><strong>NIS:</strong> ' + foundSantri.nis + '</span>';
+      html += '            <span><strong>Kelas:</strong> ' + (foundSantri.kelas || '-') + '</span>';
+      html += '            <span><strong>Halaqoh:</strong> ' + (foundHalaqoh.namaHalaqoh || '-') + '</span>';
+      html += '            <span><strong>Pengampu:</strong> ' + (foundHalaqoh.ustadzNama || '-') + '</span>';
+      html += '          </div>';
+      html += '        </div>';
+      html += '      </div>';
+      html += '    </div>';
+      html += '  </div>';
+
+      // 4 Box Metrik Capaian
+      html += '  <div class="row g-2 mb-3 text-center">';
+      html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-success small fw-bold">Ziyadah</div><div class="fs-5 fw-bold text-success">' + (totals.ziyadah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">sesi</small></div></div></div>';
+      html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-info-emphasis small fw-bold">I\'adah</div><div class="fs-5 fw-bold text-info-emphasis">' + (totals.iadah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">sesi</small></div></div></div>';
+      html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-warning-emphasis small fw-bold">Tilawah</div><div class="fs-5 fw-bold text-warning-emphasis">' + (totals.tilawah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">juz</small></div></div></div>';
+      html += '    <div class="col-3"><div class="p-2 border rounded bg-light"><div class="text-primary small fw-bold">Muroja\'ah</div><div class="fs-5 fw-bold text-primary">' + (totals.murojaah || 0) + ' <small class="text-muted" style="font-size:0.7rem;">juz</small></div></div></div>';
+      html += '  </div>';
+
+      // Tabel Runtut Hari Demi Hari (Potrait)
+      html += '  <table class="table table-bordered table-striped align-middle mb-3" style="font-size:0.78rem;">';
+      html += '    <thead class="table-dark text-white text-center">';
+      html += '      <tr>';
+      html += '        <th style="width: 120px;">Hari &amp; Tanggal</th>';
+      html += '        <th>Ziyadah</th>';
+      html += '        <th>I\'adah</th>';
+      html += '        <th>Tilawah</th>';
+      html += '        <th>Muroja\'ah</th>';
+      html += '      </tr>';
+      html += '    </thead>';
+      html += '    <tbody>';
+
+      dates.forEach(function(d) {
+        var dateObj = new Date(d + 'T00:00:00');
+        var dayIdx = dateObj.getDay();
+        var dayName = dayNamesIndo[dayIdx];
+        var dayNum = parseInt(d.slice(8, 10), 10);
+        var monthNum = parseInt(d.slice(5, 7), 10);
+        var isFriday = (dayIdx === 5);
+
+        html += '      <tr>';
+        html += '        <td class="text-center ' + (isFriday ? 'table-warning fw-bold text-warning-emphasis' : 'fw-semibold text-dark') + '">';
+        html += '          <div>' + dayName + '</div>';
+        html += '          <div class="text-muted small" style="font-size:0.68rem;">' + dayNum + '/' + monthNum + '</div>';
+        html += '        </td>';
+
+        // Ziyadah
+        var ziyArr = (foundSantri.ziyadah[d] || []).filter(function(i) { return i.type === 'ziyadah'; });
+        html += '        <td class="text-start p-2">';
+        if (ziyArr.length > 0) {
+          ziyArr.forEach(function(item) {
+            html += '<div class="mb-1"><span class="badge bg-success py-1 px-2">' + (item.info || 'Ziyadah') + '</span></div>';
+          });
+        } else {
+          html += '<span class="text-muted small">-</span>';
+        }
+        html += '        </td>';
+
+        // I'adah
+        var iadArr = (foundSantri.ziyadah[d] || []).filter(function(i) { return i.type === 'iadah'; });
+        html += '        <td class="text-start p-2">';
+        if (iadArr.length > 0) {
+          iadArr.forEach(function(item) {
+            html += '<div class="mb-1"><span class="badge bg-info text-dark py-1 px-2">' + (item.info || 'I\'adah') + '</span></div>';
+          });
+        } else {
+          html += '<span class="text-muted small">-</span>';
+        }
+        html += '        </td>';
+
+        // Tilawah
+        var tilArr = (foundSantri.ziyadah[d] || []).filter(function(i) { return i.type === 'tilawah'; });
+        html += '        <td class="text-start p-2">';
+        if (tilArr.length > 0) {
+          tilArr.forEach(function(item) {
+            html += '<div class="mb-1"><span class="badge bg-warning text-dark py-1 px-2">' + (item.info || 'Tilawah') + '</span></div>';
+          });
+        } else {
+          html += '<span class="text-muted small">-</span>';
+        }
+        html += '        </td>';
+
+        // Muroja'ah
+        var murArr = foundSantri.murojaah[d] || [];
+        html += '        <td class="text-start p-2">';
+        if (murArr.length > 0) {
+          murArr.forEach(function(item) {
+            html += '<div class="mb-1"><span class="badge bg-primary py-1 px-2">' + (item.info || 'Muroja\'ah') + '</span></div>';
+          });
+        } else {
+          html += '<span class="text-muted small">-</span>';
+        }
+        html += '        </td>';
+
+        html += '      </tr>';
+      });
+
+      html += '    </tbody>';
+      html += '  </table>';
+
+      // Catatan Ustadz
+      html += '  <div class="card border mb-4 shadow-none">';
+      html += '    <div class="card-body p-3">';
+      html += '      <h6 class="fw-bold text-dark mb-1"><i class="bi bi-chat-left-text me-2 text-success"></i>Catatan &amp; Evaluasi Pekanan Ustadz</h6>';
+      html += '      <div class="text-secondary small mt-2" style="white-space: pre-wrap; line-height: 1.5;">' + (santriCatatan || '<span class="text-muted fst-italic">Tidak ada catatan khusus untuk santri ini.</span>') + '</div>';
+      html += '    </div>';
+      html += '  </div>';
+
+      html += '</div>';
+      output.innerHTML = html;
+    }
+
+    function switchToHalaqohView() {
+      NIS_PARAM = '';
+      renderLaporan(window._rawHalaqohData, window._rawCatatanData);
+    }
+
+    // ==========================================
+    // 2. RENDER LAPORAN HALAQOH (MATRIX VIEW)
+    // ==========================================
     function renderLaporan(halaqohDataArr, catatanCache) {
+      window._rawHalaqohData = halaqohDataArr;
+      window._rawCatatanData = catatanCache;
+
+      // Jika ada parameter NIS spesifik, langsung render tampilan portrait
+      if (NIS_PARAM && NIS_PARAM.trim() !== '') {
+        renderLaporanSantri(halaqohDataArr, catatanCache, NIS_PARAM);
+        return;
+      }
+
       var output = document.getElementById('output');
       if (!halaqohDataArr || halaqohDataArr.length === 0) {
         output.innerHTML = '<div class="alert alert-info text-center"><i class="bi bi-info-circle me-2"></i>Tidak ada data halaqoh untuk rentang tanggal ini.</div>';
         return;
       }
+
+      document.getElementById('doc-main-title').innerHTML = '<i class="bi bi-bar-chart-line me-2"></i>Laporan Pekanan Halaqoh';
+      document.getElementById('toolbar-sub-title').textContent = 'Laporan Pekanan Halaqoh';
+      document.getElementById('toolbar-action-buttons').innerHTML = '<button onclick="window.print()" class="btn btn-success btn-sm"><i class="bi bi-printer me-1"></i>Cetak / Simpan PDF</button>';
 
       var jenisArr = ['ziyadah', 'iadah', 'tilawah', 'murojaah'];
       var dates = [];
@@ -146,7 +362,7 @@
         html += '<thead>';
         html += '<tr class="table-dark text-white">';
         html += '<th rowspan="2" class="text-center align-middle text-white" style="min-width:30px;background:#212529;">No</th>';
-        html += '<th rowspan="2" class="text-center align-middle text-white" style="min-width:150px;background:#212529;">Nama</th>';
+        html += '<th rowspan="2" class="text-center align-middle text-white" style="min-width:150px;background:#212529;">Nama Santri</th>';
         html += '<th rowspan="2" class="text-center align-middle text-white" style="min-width:50px;background:#212529;">Kls</th>';
 
         dates.forEach(function(d) {
@@ -178,7 +394,12 @@
 
           html += '<tr>';
           html += '<td class="text-center text-muted" style="font-size:0.7rem;">' + (sidx + 1) + '</td>';
-          html += '<td><div class="fw-semibold">' + (s.nama || '-') + '</div><div class="text-muted" style="font-size:0.63rem;">NIS: ' + s.nis + '</div></td>';
+          html += '<td>';
+          html += '  <a href="javascript:void(0)" class="text-success fw-bold text-decoration-none" onclick="renderLaporanSantri(window._rawHalaqohData, window._rawCatatanData, \'' + s.nis + '\')" title="Klik untuk lihat rincian potrait santri ini">';
+          html += '    <i class="bi bi-person-fill me-1"></i>' + (s.nama || '-');
+          html += '  </a>';
+          html += '  <div class="text-muted" style="font-size:0.63rem;">NIS: ' + s.nis + '</div>';
+          html += '</td>';
           html += '<td class="text-center">' + (s.kelas || '-') + '</td>';
 
           dates.forEach(function(d) {
@@ -240,9 +461,10 @@
       document.getElementById('btnCetak').disabled = false;
     }
 
-    // 3. FETCH DATA DARI GOOGLE APPS SCRIPT (Menggunakan JSONP untuk Bypass CORS)
+    // ==========================================
+    // 3. FETCH DATA DARI GAS (JSONP Bypass CORS)
+    // ==========================================
     if (START_DATE && END_DATE) {
-      // Buat nama fungsi callback global
       window.handleLaporanData = function(res) {
         if (!res || !res.success) {
           document.getElementById('output').innerHTML = 
@@ -252,7 +474,6 @@
         renderLaporan(res.data, res.catatan);
       };
 
-      // Tambahkan script tag secara dinamis untuk trigger request JSONP
       const apiUrl = `${GAS_WEBAPP_URL}?api=laporan&start=${START_DATE}&end=${END_DATE}&halaqoh=${HALAQOH_ID}&callback=handleLaporanData`;
       const script = document.createElement('script');
       script.src = apiUrl;
